@@ -1,0 +1,15 @@
+{
+    "compilerOptions": {
+      "module":"CommonJS",
+      "removeComments": true,
+      "preserveConstEnums": true,
+      "sourceMap": true,
+      "esModuleInterop": true,
+      "target": "ES6",
+      "allowUnreachableCode": false,
+      "declaration": true,
+      "outDir": "./lib"
+    },
+    "include": ["src"],
+    "exclude": ["node_modules", "**/__tests__/*"]
+}
