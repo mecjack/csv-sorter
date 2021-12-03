@@ -18,8 +18,9 @@ const csv = require('csv-sorter');
 
 const config  = {
     src: './Source.csv',
-    sortColumn: 1,
-    reverse: false,
+    sortColumn: 1, //number of column to sort
+    reverse: false, //sort in revserse order
+    sortWithHeader: false //sort including first header line
 };
 
 csv.sort(config, (result)=>{
@@ -33,8 +34,9 @@ csv.sort(config, (result)=>{
 const config  = {
     src: './Source.csv',
     dest: './Result.csv',
-    sortColumn: 1,
-    reverse: false
+    sortColumn: 1, //number of column to sort
+    reverse: false, //sort in revserse order
+    sortWithHeader: false //sort including first header line
 };
 
 csv.sort(config, (result)=>{
@@ -44,13 +46,18 @@ csv.sort(config, (result)=>{
 ```
 
 ## Or from CLI:
- 
+#### basic
 `node ./node_modules/csv-sorter/lib/index.js ./Source.csv ./Dest.csv 1`
 
-    
-`node ./node_modules/csv-sorter/lib/index.js ./Source.csv ./Dest.csv 1 true`
+#### e.g. with reverse option
+`node ./node_modules/csv-sorter/lib/index.js ./Source.csv ./Dest.csv 2 true`
+
+#### e.g. with reverse and sortWithHeader option
+`node ./node_modules/csv-sorter/lib/index.js ./Source.csv ./Dest.csv 3 true true`
 
 
-Contributers welcome!
+
+
+**Contributers welcome!**
 
  

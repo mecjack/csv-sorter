@@ -1,17 +1,20 @@
-import parse from 'csv-parse/lib/sync';
+import {parse} from 'csv-parse';
 import fs, {
   PathLike
 } from 'fs';
 import {
   argv
 } from 'process';
+import split from 'split-string';
+ 
 
 
 export function sort(config: {
   src: PathLike,
   dest ? : PathLike,
   sortColumn: number,
-  reverse ? : boolean
+  reverse ? : boolean,
+  sortWithHeader ? : boolean
 }, callback: Function) {
 
 
@@ -24,7 +27,8 @@ function _sortCSV(config: {
   src: PathLike,
   dest ? : PathLike,
   sortColumn: number,
-  reverse ? : boolean
+  reverse ? : boolean,
+  sortWithHeader ? : boolean
 }) {
   return new Promise((resolve, reject) => {
 
@@ -32,35 +36,57 @@ function _sortCSV(config: {
 
       const firstLine = data.toString().split('\n')[0];
       const delimiter = String.fromCharCode(recognizeDelimiter(data));
-      const splittedLine = firstLine.split(delimiter);
+      const splittedLine = split(firstLine, { separator: delimiter, quotes: ['"'] });
 
       let columns = [];
       for (let i = 0; i < splittedLine.length; i++) {
         columns.push(`${i+1}`);
       }
 
-      const records = parse(data, {
+      const records = [];
+
+      const parser = parse(data, { //pass csv without header into parser
         bom: true,
-        // ltrim: true,
-        // rtrim: true,
+        ltrim: true,
+        rtrim: true,
         columns: columns,
-        delimiter: delimiter
+        delimiter: delimiter,
       })
 
-      const sorted = records.sort((a, b) => {
-        if (!config.reverse) {
-          return a[config.sortColumn].localeCompare(b[config.sortColumn], undefined, {
-            numeric: true,
-            sensitivity: 'base'
-          })
-        } else {
-          return b[config.sortColumn].localeCompare(a[config.sortColumn], undefined, {
-            numeric: true,
-            sensitivity: 'base'
-          })
+      let first={};
+
+      parser.on('readable', function(){
+        let record;
+        while ((record = parser.read()) !== null) {
+          if(Object.keys(first).length === 0  && !config.sortWithHeader){
+            Object.assign(first,record);
+          }else{
+            records.push(record);
+          }
         }
-      })
-      config.dest ? writeFile(sorted, splittedLine.length) : resolve(sorted);
+      });
+
+      parser.on('end', function(){
+        let sorted = records.sort((a, b) => {
+          if (!config.reverse) {
+            return a[config.sortColumn].localeCompare(b[config.sortColumn], undefined, {
+              numeric: true,
+              sensitivity: 'base'
+            })
+          } else {
+            return b[config.sortColumn].localeCompare(a[config.sortColumn], undefined, {
+              numeric: true,
+              sensitivity: 'base'
+            })
+          }
+        })
+        !config.sortWithHeader && sorted.unshift(first);
+        config.dest ? writeFile(sorted, splittedLine.length) : resolve(sorted);
+      });
+
+      parser.on('error', function(err){
+        console.error(err.message);
+      });
     })
 
     function writeFile(sorted, length: number) {
@@ -133,6 +159,27 @@ if(argv[2]){
           dest: argv[3],
           sortColumn: parseInt(argv[4]),
           reverse: false
+        });
+      } else if (!/^\d+$/.test(argv[4])) {
+        console.error('sortColumn argument is not UInt');
+      }
+      break;
+    case 7:
+      if (argv[6] === 'true' && /^\d+$/.test(argv[4])) {
+        _sortCSV({
+          src: argv[2],
+          dest: argv[3],
+          sortColumn: parseInt(argv[4]),
+          reverse: argv[5] === 'true'?true:false,
+          sortWithHeader: true
+        });
+      } else if (argv[6] !== 'true' && /^\d+$/.test(argv[4])) {
+        _sortCSV({
+          src: argv[2],
+          dest: argv[3],
+          sortColumn: parseInt(argv[4]),
+          reverse: argv[5] === 'true'?true:false,
+          sortWithHeader: false
         });
       } else if (!/^\d+$/.test(argv[4])) {
         console.error('sortColumn argument is not UInt');
