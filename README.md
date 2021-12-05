@@ -23,7 +23,7 @@ const config  = {
     sortWithHeader: false //sort including first header line
 };
 
-csv.sort(config, (result)=>{
+csv.sort(config, (result, err)=>{
     console.log(JSON.stringify(result)); //array of objects of sorted records for further manipulation
 });
 
@@ -39,7 +39,7 @@ const config  = {
     sortWithHeader: false //sort including first header line
 };
 
-csv.sort(config, (result)=>{
+csv.sort(config, (result, err)=>{
     //use your sorted Result.csv file for whatever...
 });
 

@@ -20,6 +20,8 @@ export function sort(config: {
 
   Promise.all([_sortCSV(config)]).then((values) => {
     callback(values[0]);
+  }).catch(reason => {
+    callback(null, reason);
   });
 }
 
@@ -81,15 +83,15 @@ function _sortCSV(config: {
           }
         })
         !config.sortWithHeader && sorted.unshift(first);
-        config.dest ? writeFile(sorted, splittedLine.length) : resolve(sorted);
+        config.dest ? writeFile(sorted, splittedLine.length, delimiter) : resolve(sorted);
       });
 
       parser.on('error', function(err){
-        console.error(err.message);
+        reject(err)
       });
     })
 
-    function writeFile(sorted, length: number) {
+    function writeFile(sorted, length: number, delimiter: string) {
       try {
         for (const elem of sorted) {
 
@@ -98,13 +100,13 @@ function _sortCSV(config: {
             if (i === length - 1) {
               line += `${elem[i+1]}`
             } else {
-              line += `${elem[i+1]};`
+              line += `${elem[i+1]}${delimiter}`
             }
           }
           line += `\n`;
           fs.appendFileSync(config.dest, line)
         }
-        resolve(0);
+        resolve(sorted);
       } catch (err) {
         reject(err)
       }
