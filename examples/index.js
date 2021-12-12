@@ -19,7 +19,8 @@ const config  = {
     src: './Source.csv',
     dest: './Result.csv',
     sortColumn: 1,
-    reverse: false
+    reverse: false,
+    sortWithHeader: false
 };
 
 csv.sort(config, (result)=>{

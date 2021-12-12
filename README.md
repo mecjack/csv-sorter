@@ -4,7 +4,7 @@
 
 Naturally sort your CSV files by a column of your choice with delimiter auto recognition.
 Save the result into a new sorted .csv file or return an array of objects of sorted records for further manipulation.   
-Or use it from the CLI.
+Or use it from the CLI!
 
 
 ## Usage examples:    
@@ -46,15 +46,23 @@ csv.sort(config, (result, err)=>{
 ```
 
 ## Or from CLI:
-#### basic
-`node ./node_modules/csv-sorter/lib/index.js ./Source.csv ./Dest.csv 1`
 
-#### e.g. with reverse option
-`node ./node_modules/csv-sorter/lib/index.js ./Source.csv ./Dest.csv 2 true`
+#### params:
 
-#### e.g. with reverse and sortWithHeader option
-`node ./node_modules/csv-sorter/lib/index.js ./Source.csv ./Dest.csv 3 true true`
+--s path to source file\
+--d path to destination file\
+--c sortColumn  
 
+#### options:
+
+-H  sortWithHeader\
+-O  stdout\
+-R  reverse   
+#### from file
+`node ./node_modules/csv-sorter/lib/index.js --s=./Source.csv --d=./Dest.csv --c=1 -HOR`
+
+#### example from stdin
+`cat Source.csv | node ./node_modules/csv-sorter/lib/index.js --d=./Dest.csv --c=1 -HOR`
 
 
 

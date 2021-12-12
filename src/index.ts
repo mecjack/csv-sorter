@@ -2,6 +2,7 @@ import {parse} from 'csv-parse';
 import fs, {
   PathLike
 } from 'fs';
+import path from 'path';
 import {
   argv
 } from 'process';
@@ -26,16 +27,24 @@ export function sort(config: {
 }
 
 function _sortCSV(config: {
-  src: PathLike,
+  src ? : PathLike,
+  stdin ? : Buffer,
   dest ? : PathLike,
   sortColumn: number,
   reverse ? : boolean,
-  sortWithHeader ? : boolean
+  sortWithHeader ? : boolean,
+  cli ? : boolean,
+  stdout ? : boolean
 }) {
   return new Promise((resolve, reject) => {
 
-    fs.readFile(config.src, (err, data) => {
+    config.stdin && config.src && reject('Two source files provided, which one to take?');
+    config.stdin && fs.writeFileSync('tmp.csv', config.stdin);
+    const file = config.stdin? 'tmp.csv': config.src;
 
+    fs.readFile(file, (err, data) => {
+
+      err && reject(err);
       const firstLine = data.toString().split('\n')[0];
       const delimiter = String.fromCharCode(recognizeDelimiter(data));
       const splittedLine = split(firstLine, { separator: delimiter, quotes: ['"'] });
@@ -71,19 +80,29 @@ function _sortCSV(config: {
       parser.on('end', function(){
         let sorted = records.sort((a, b) => {
           if (!config.reverse) {
-            return a[config.sortColumn].localeCompare(b[config.sortColumn], undefined, {
-              numeric: true,
-              sensitivity: 'base'
-            })
-          } else {
-            return b[config.sortColumn].localeCompare(a[config.sortColumn], undefined, {
-              numeric: true,
-              sensitivity: 'base'
-            })
-          }
+              if(!isNaN(a[config.sortColumn]) && !isNaN(b[config.sortColumn])){
+                if(parseFloat(a[config.sortColumn]) < parseFloat(b[config.sortColumn])) return -1;
+                if(parseFloat(a[config.sortColumn]) > parseFloat(b[config.sortColumn])) return 1;
+                if(parseFloat(a[config.sortColumn]) === parseFloat(b[config.sortColumn])) return 0;
+              } 
+                return a[config.sortColumn].localeCompare(b[config.sortColumn], undefined, {
+                  numeric: true,
+                  sensitivity: 'base'
+                })
+            } else {
+              if(!isNaN(a[config.sortColumn]) && !isNaN(b[config.sortColumn])){
+                if(parseFloat(a[config.sortColumn]) < parseFloat(b[config.sortColumn])) return 1;
+                if(parseFloat(a[config.sortColumn]) > parseFloat(b[config.sortColumn])) return -1;
+                if(parseFloat(a[config.sortColumn]) === parseFloat(b[config.sortColumn])) return 0;
+              } 
+                return b[config.sortColumn].localeCompare(a[config.sortColumn], undefined, {
+                  numeric: true,
+                  sensitivity: 'base'
+                })
+            }
         })
         !config.sortWithHeader && sorted.unshift(first);
-        config.dest ? writeFile(sorted, splittedLine.length, delimiter) : resolve(sorted);
+        config.dest || config.stdout? write(sorted, splittedLine.length, delimiter): !config.dest && !config.cli? resolve(sorted):null;
       });
 
       parser.on('error', function(err){
@@ -91,10 +110,9 @@ function _sortCSV(config: {
       });
     })
 
-    function writeFile(sorted, length: number, delimiter: string) {
+    function write(sorted, length: number, delimiter: string) {
       try {
-        for (const elem of sorted) {
-
+        sorted.forEach((elem,j) => {
           let line = ``;
           for (let i = 0; i < length; i++) {
             if (i === length - 1) {
@@ -103,9 +121,10 @@ function _sortCSV(config: {
               line += `${elem[i+1]}${delimiter}`
             }
           }
-          line += `\n`;
-          fs.appendFileSync(config.dest, line)
-        }
+          if(sorted.length -1 > j) line += `\n`;
+          config.dest && fs.appendFileSync(config.dest, line)
+          config.stdout && process.stdout.write(line)
+        });
         resolve(sorted);
       } catch (err) {
         reject(err)
@@ -127,67 +146,46 @@ function _sortCSV(config: {
 }
 
 if(argv[2]){
-  switch (argv.length) {
-    case 2:
-      console.error('argument(s) missing');
-      break;
-    case 3:
-      console.error('argument(s) missing');
-      break;
-    case 4:
-      console.error('argument(s) missing');
-      break;
-    case 5:
-      if (!/^\d+$/.test(argv[4])) {
-        console.error('sortColumn argument is not UInt');
-        break;
-      } else _sortCSV({
-        src: argv[2],
-        dest: argv[3],
-        sortColumn: parseInt(argv[4])
-      });
-      break;
-    case 6:
-      if (argv[5] === 'true' && /^\d+$/.test(argv[4])) {
-        _sortCSV({
-          src: argv[2],
-          dest: argv[3],
-          sortColumn: parseInt(argv[4]),
-          reverse: true
-        });
-      } else if (argv[5] !== 'true' && /^\d+$/.test(argv[4])) {
-        _sortCSV({
-          src: argv[2],
-          dest: argv[3],
-          sortColumn: parseInt(argv[4]),
-          reverse: false
-        });
-      } else if (!/^\d+$/.test(argv[4])) {
-        console.error('sortColumn argument is not UInt');
-      }
-      break;
-    case 7:
-      if (argv[6] === 'true' && /^\d+$/.test(argv[4])) {
-        _sortCSV({
-          src: argv[2],
-          dest: argv[3],
-          sortColumn: parseInt(argv[4]),
-          reverse: argv[5] === 'true'?true:false,
-          sortWithHeader: true
-        });
-      } else if (argv[6] !== 'true' && /^\d+$/.test(argv[4])) {
-        _sortCSV({
-          src: argv[2],
-          dest: argv[3],
-          sortColumn: parseInt(argv[4]),
-          reverse: argv[5] === 'true'?true:false,
-          sortWithHeader: false
-        });
-      } else if (!/^\d+$/.test(argv[4])) {
-        console.error('sortColumn argument is not UInt');
-      }
-      break;
-    default:
-      break;
+  const args = getArgs();
+  const file = fs.readFileSync(0);
+  if(!/^\d+$/.test(args['c'])){
+    console.error('sortColumn argument is not UInt');
+  }else if(!fs.existsSync(args['s']) && !file.length){
+    console.error('Source file does not exist');
+  }else{
+    _sortCSV({
+      src: args['s']?args['s']:'',
+      stdin: file.length?file:null,
+      dest: args['d']? args['d']: null,
+      sortColumn: parseInt(args['c']),
+      reverse: args['R']? true: false,
+      sortWithHeader: args['H']? true: false,
+      cli: true,
+      stdout: !args['d'] || args['O']
+    })
   }
+}
+
+
+function getArgs () {
+  const args = {};
+  process.argv
+      .slice(2, process.argv.length)
+      .forEach( arg => {
+      // params
+      if (arg.slice(0,2) === '--') {
+          const params = arg.split('=');
+          const paramsFlag = params[0].slice(2,params[0].length);
+          const paramsValue = params.length > 1 ? params[1] : true;
+          args[paramsFlag] = paramsValue;
+      }
+      // options
+      else if (arg[0] === '-') {
+          const options = arg.slice(1,arg.length).split('');
+          options.forEach(option => {
+          args[option] = true;
+          });
+      }
+  });
+  return args;
 }

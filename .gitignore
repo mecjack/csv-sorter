@@ -1,6 +1,8 @@
 node_modules
 /lib
 test
-test.ts
+short_tests
+long_tests
 res
-index.ts
+res_cli
+tmp.csv
