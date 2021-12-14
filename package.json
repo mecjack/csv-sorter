@@ -1,6 +1,6 @@
 {
   "name": "csv-sorter",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "description": "Naturally sort your CSV files by a column of your choice with delimiter auto recognition.",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",

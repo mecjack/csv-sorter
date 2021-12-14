@@ -5,10 +5,12 @@ import fs, {
   PathLike
 } from 'fs';
 import path from 'path'
-import { execSync } from 'child_process';
+import { exec, execFile, execSync } from 'child_process';
+import process from 'process'
 
 
-//***  Put all your test CSV files in the ./test folder. Name them test1.csv to test[n].csv and run the tests with `npm run test`
+
+//***  Put all your test CSV files in the test folder. Name them test1.csv to test[n].csv and run the tests with `npm run test`
 
 const fields = [{
     6: 2
@@ -134,52 +136,94 @@ const fields = [{
 
 
 beforeAll(() => {
-  !fs.existsSync('./res') && fs.mkdirSync('./res')
-  fs.readdir('./res', (err, files) => {
+  !fs.existsSync(path.join('res')) && fs.mkdirSync(path.join('res'))
+  fs.readdir(path.join('res'), (err, files) => {
     if (err) throw err;
 
     //empty result folder
     for (const file of files) {
-      fs.unlinkSync(path.join('./res', file));
+      fs.unlinkSync(path.join(path.join('res'), file));
     }
   })
   //Cli
-  !fs.existsSync('./res_cli') && fs.mkdirSync('./res_cli')
-  fs.readdir('./res_cli', (err, files) => {
+  !fs.existsSync(path.join('res_cli')) && fs.mkdirSync(path.join('res_cli'))
+  fs.readdir(path.join('res_cli'), (err, files) => {
     if (err) throw err;
 
     //empty result folder
     for (const file of files) {
-      fs.unlinkSync(path.join('./res_cli', file));
+      fs.unlinkSync(path.join('res_cli', file));
     }
   })
 })
 
 
-test.concurrent.each([...Array(fs.readdirSync('./test').length)].map((_, index) => index + 1))('File %i', async (i) => {
-  const col = getRandomIntInclusive(1, fields.filter((obj) => parseInt(Object.keys(obj)[0]) === i)[0][i]);
+test.concurrent.each([...Array(fs.readdirSync(path.join('test')).length)].map((_, index) => index + 1))('File %i', async (i) => {
+  const col = getRandomIntInclusive(1, fields.filter((obj) => parseInt(Object.keys(obj)[0]) === i)[0][i]); //column to be sorted (random)
   const sortWithHeader = Math.random() < 0.5;
   const reverse = Math.random() < 0.5;
   const withSource = Math.random() < 0.5;
   const withDest = Math.random() < 0.5;
   const withStdout = Math.random() < 0.5;
-  console.log('withSource: ', withSource, 'src:', `./test/test${i}.csv`, 'withDest: ', withDest, 'dest:', `./res/res${i}.csv`, 'sortColumn:', col, 'reverse:', reverse, 'sortWithHeader:', sortWithHeader)
+  const firstLineSrc = fs.readFileSync(path.join('test', `test${i}.csv`)).toString().split('\n')[0]
+
+  //---JS
+  console.log('withSource: ', withSource, 'src:', path.join('test', `test${i}.csv`), 'withDest: ', withDest, 'dest:', path.join('res', `res${i}.csv`), 'sortColumn:', col, 'reverse:', reverse, 'sortWithHeader:', sortWithHeader)
+  
   let res = <any>[]
-  res = await SORT({src: `./test/test${i}.csv`, dest: withDest?`./res/res${i}.csv`:null, sortColumn: col, reverse: reverse, sortWithHeader: sortWithHeader})
-  const stdout = execSync(`${!withSource?`cat ./test/test${i}.csv | `:''}node lib/index.js ${withSource &&`--s=./test/test${i}.csv`} ${withDest && `--d=./res_cli/res${i}.csv`} --c=${col} -${reverse?'R':''}${sortWithHeader?'H':''}${withStdout?'O':''}`)
-  withStdout && expect(stdout.toString().length).toBeGreaterThan(0)
-  withDest && expect(fs.statSync(`./res/res${i}.csv`).size).toBeGreaterThan(0)
+ 
+  res = await SORT({src: path.join('test', `test${i}.csv`), dest: withDest? path.join('res', `res${i}.csv`):null, sortColumn: col, reverse: reverse, sortWithHeader: sortWithHeader})
+  if(withDest) expect(fs.statSync(path.join('res', `res${i}.csv`)).size).toBeGreaterThan(0)
   for(let k=0;k<res.length;k++){ //test if numbers are sorted
     res[k+1] && res[k+1][col] && res[k+2] && res[k+2][col] && !isNaN(res[k+1][col]) && !isNaN(res[k+2][col]) && !reverse && expect(parseFloat(res[k+1][col])).toBeLessThanOrEqual(parseFloat(res[k+2][col]))
     res[k+1] && res[k+1][col] && res[k+2] && res[k+2][col] && !isNaN(res[k+1][col]) && !isNaN(res[k+2][col]) && reverse && expect(parseFloat(res[k+1][col])).toBeGreaterThanOrEqual(parseFloat(res[k+2][col]))
   }
-  const firstLineSrc = fs.readFileSync(`./test/test${i}.csv`).toString().split('\n')[0]
-  const firstLineRes = withDest? fs.readFileSync(`./res/res${i}.csv`).toString().split('\n')[0]: undefined
-  !sortWithHeader && withDest && expect(firstLineRes).toBe(firstLineSrc)
-  withDest && expect(fs.readFileSync(`./res/res${i}.csv`).toString().split('\n').length).toBe(fs.readFileSync(`./test/test${i}.csv`).toString().split('\n').length)
-  withDest && expect(fs.readFileSync(`./res/res${i}.csv`)).toEqual(fs.readFileSync(`./res_cli/res${i}.csv`))
+
+
+  const firstLineRes = withDest? fs.readFileSync(path.join('res', `res${i}.csv`)).toString().split('\n')[0]: undefined
+  if(!sortWithHeader && withDest) expect(firstLineRes.replace(/"/g,'').replace(/\s/g,'')).toMatch(firstLineSrc.replace(/"/g,'').replace(/\s/g,''))
+  withDest && expect(fs.readFileSync(path.join('res', `res${i}.csv`)).toString().split('\n').length).toBe(fs.readFileSync(path.join('test', `test${i}.csv`)).toString().split('\n').length)
+
+
+  //---CLI
+  const stdout = execSync(`${!withSource?`${process.platform == 'win32'? 'type': 'cat'} ${path.join('test', `test${i}.csv`)} | `:''}node ${path.join('lib', 'index.js')} ${withSource &&`--s=${path.join('test', `test${i}.csv`)}`} ${withDest && `--d=${path.join('res_cli', `res${i}.csv`)}`} --c=${col} -${reverse?'R':''}${sortWithHeader?'H':''}${withStdout?'O':''}`)
+  
+  console.log(`${!withSource?`type ${path.join('test', `test${i}.csv`)} | `:''}node ${path.join('lib', 'index.js')} ${withSource &&`--s=${path.join('test', `test${i}.csv`)}`} ${withDest && `--d=${path.join('res_cli', `res${i}.csv`)}`} --c=${col} -${reverse?'R':''}${sortWithHeader?'H':''}${withStdout?'O':''}`)
+  
+  withStdout && expect(stdout.toString().length).toBeGreaterThan(0)
+  withDest && expect(fs.statSync(path.join('res_cli', `res${i}.csv`)).size).toBeGreaterThan(0)
+  const firstLineResCLI = withDest? fs.readFileSync(path.join('res_cli', `res${i}.csv`)).toString().split('\n')[0]: undefined
+  if(!sortWithHeader && withDest) expect(firstLineResCLI.replace(/"/g,'').replace(/\s/g,'')).toMatch(firstLineSrc.replace(/"/g,'').replace(/\s/g,''))
+
+  withDest && expect(fs.readFileSync(path.join('res_cli', `res${i}.csv`)).toString().split('\n').length).toBe(fs.readFileSync(path.join('test', `test${i}.csv`)).toString().split('\n').length)
+  
+  //---Both
+  if(withDest){
+    expect(fs.readFileSync(path.join('res', `res${i}.csv`))).toEqual(fs.readFileSync(path.join('res_cli', `res${i}.csv`)))
+  }
 },100000)
 
+
+test('no source file', ()=>{
+
+  const stdout = execSync(`node ${path.join('lib', 'index.js')} --d=${path.join('res_cli', `res99.csv`)} --c=1`)
+  expect(stdout.toString()).toMatch('Source file does not exist');
+
+})
+
+test('sortColumn UInt', ()=>{
+
+  const stdout = execSync(`node ${path.join('lib', 'index.js')} --s=${path.join('test', `test1.csv`)} --d=${path.join('res_cli', `res99.csv`)} --c=1.2`)
+  expect(stdout.toString()).toMatch('sortColumn argument is not UInt');
+
+})
+
+test('two source files', ()=>{
+
+  const stdout = execSync(`${process.platform == 'win32'? 'type': 'cat'} ${path.join('test', 'test2.csv')} | node ${path.join('lib', 'index.js')} --s=${path.join('test', `test1.csv`)} --d=${path.join('res_cli', `res98.csv`)} --c=1`)
+  expect(stdout.toString()).toMatch('Two source files provided, which one to take?');
+
+})
 
 
 function SORT(config: {

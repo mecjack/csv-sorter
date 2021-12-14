@@ -1,11 +1,6 @@
 import {parse} from 'csv-parse';
-import fs, {
-  PathLike
-} from 'fs';
-import path from 'path';
-import {
-  argv
-} from 'process';
+import fs, {PathLike} from 'fs';
+import {argv, stdin, stdout} from 'process';
 import split from 'split-string';
  
 
@@ -38,7 +33,6 @@ function _sortCSV(config: {
 }) {
   return new Promise((resolve, reject) => {
 
-    config.stdin && config.src && reject('Two source files provided, which one to take?');
     config.stdin && fs.writeFileSync('tmp.csv', config.stdin);
     const file = config.stdin? 'tmp.csv': config.src;
 
@@ -146,16 +140,19 @@ function _sortCSV(config: {
 }
 
 if(argv[2]){
+  (async function(){
   const args = getArgs();
-  const file = fs.readFileSync(0);
+  const file = await read(stdin);
   if(!/^\d+$/.test(args['c'])){
-    console.error('sortColumn argument is not UInt');
+    stdout.write('sortColumn argument is not UInt');
   }else if(!fs.existsSync(args['s']) && !file.length){
-    console.error('Source file does not exist');
+    stdout.write('Source file does not exist');
+  }else if(file && file.length && args['s']){
+    stdout.write('Two source files provided, which one to take?');
   }else{
     _sortCSV({
       src: args['s']?args['s']:'',
-      stdin: file.length?file:null,
+      stdin: file && file.length?file:null,
       dest: args['d']? args['d']: null,
       sortColumn: parseInt(args['c']),
       reverse: args['R']? true: false,
@@ -164,6 +161,16 @@ if(argv[2]){
       stdout: !args['d'] || args['O']
     })
   }
+})()
+}
+
+async function read(stream){
+  let str = '';
+  if(stream.isTTY) return Buffer.from(str, 'utf-8'); 
+  for await (const i of stream) {
+    str+=i;
+  }
+  return Buffer.from(str, 'utf-8');
 }
 
 
