@@ -5,20 +5,27 @@ import split from 'split-string';
  
 
 
-export function sort(config: {
+export async function sort(config: {
   src: PathLike,
   dest ? : PathLike,
   sortColumn: number,
   reverse ? : boolean,
   sortWithHeader ? : boolean
-}, callback: Function) {
+}, callback ? : Function) {
 
-
-  Promise.all([_sortCSV(config)]).then((values) => {
-    callback(values[0]);
-  }).catch(reason => {
-    callback(null, reason);
-  });
+  if(callback){
+    Promise.all([_sortCSV(config)]).then((values) => {
+      callback(values[0]);
+    }).catch(reason => {
+      callback(null, reason);
+    });
+  }else{
+    return Promise.all([_sortCSV(config)]).then((values) => {
+      return values[0];
+    }).catch(reason => {
+      return reason;
+    });
+  }
 }
 
 function _sortCSV(config: {
@@ -100,7 +107,7 @@ function _sortCSV(config: {
       });
 
       parser.on('error', function(err){
-        reject(err)
+        return reject(err);
       });
     })
 
@@ -121,7 +128,7 @@ function _sortCSV(config: {
         });
         resolve(sorted);
       } catch (err) {
-        reject(err)
+        return reject(err)
       }
     }
 
@@ -139,16 +146,16 @@ function _sortCSV(config: {
   })
 }
 
-if(argv[2]){
+if(argv[0].includes('node') && !argv[1].includes('jest') && argv[2]){
   (async function(){
   const args = getArgs();
   const file = await read(stdin);
   if(!/^\d+$/.test(args['c'])){
-    stdout.write('sortColumn argument is not UInt');
+    stdout.write('sortColumn argument is not UInt\n');
   }else if(!fs.existsSync(args['s']) && !file.length){
-    stdout.write('Source file does not exist');
+    stdout.write('Source file does not exist\n');
   }else if(file && file.length && args['s']){
-    stdout.write('Two source files provided, which one to take?');
+    stdout.write('Two source files provided, which one to take?\n');
   }else{
     _sortCSV({
       src: args['s']?args['s']:'',

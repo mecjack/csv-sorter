@@ -6,3 +6,5 @@ long_tests
 res
 res_cli
 tmp.csv
+.DS_Store
+coverage
