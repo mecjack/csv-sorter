@@ -45,7 +45,7 @@ function _sortCSV(config: {
 
     fs.readFile(file, (err, data) => {
 
-      err && reject(err);
+      if(err) return reject(err);
       const firstLine = data.toString().split('\n')[0];
       const delimiter = String.fromCharCode(recognizeDelimiter(data));
       const splittedLine = split(firstLine, { separator: delimiter, quotes: ['"'] });
@@ -82,9 +82,7 @@ function _sortCSV(config: {
         let sorted = records.sort((a, b) => {
           if (!config.reverse) {
               if(!isNaN(a[config.sortColumn]) && !isNaN(b[config.sortColumn])){
-                if(parseFloat(a[config.sortColumn]) < parseFloat(b[config.sortColumn])) return -1;
-                if(parseFloat(a[config.sortColumn]) > parseFloat(b[config.sortColumn])) return 1;
-                if(parseFloat(a[config.sortColumn]) === parseFloat(b[config.sortColumn])) return 0;
+                return parseFloat(a[config.sortColumn]) - parseFloat(b[config.sortColumn])
               } 
                 return a[config.sortColumn].localeCompare(b[config.sortColumn], undefined, {
                   numeric: true,
@@ -92,9 +90,7 @@ function _sortCSV(config: {
                 })
             } else {
               if(!isNaN(a[config.sortColumn]) && !isNaN(b[config.sortColumn])){
-                if(parseFloat(a[config.sortColumn]) < parseFloat(b[config.sortColumn])) return 1;
-                if(parseFloat(a[config.sortColumn]) > parseFloat(b[config.sortColumn])) return -1;
-                if(parseFloat(a[config.sortColumn]) === parseFloat(b[config.sortColumn])) return 0;
+                return parseFloat(b[config.sortColumn]) - parseFloat(a[config.sortColumn])
               } 
                 return b[config.sortColumn].localeCompare(a[config.sortColumn], undefined, {
                   numeric: true,
@@ -111,15 +107,15 @@ function _sortCSV(config: {
       });
     })
 
-    function write(sorted, length: number, delimiter: string) {
+    function write(sorted: Array<Object>, length: number, delimiter: string) {
       try {
-        sorted.forEach((elem,j) => {
+        sorted.forEach((elem: string, j) => {
           let line = ``;
           for (let i = 0; i < length; i++) {
             if (i === length - 1) {
-              line += `${elem[i+1]}`
+              line += elem[i+1].includes(delimiter)? `"${elem[i+1]}"`: `${elem[i+1]}`;
             } else {
-              line += `${elem[i+1]}${delimiter}`
+              line += elem[i+1].includes(delimiter)? `"${elem[i+1]}"${delimiter}`: `${elem[i+1]}${delimiter}`;
             }
           }
           if(sorted.length -1 > j) line += `\n`;

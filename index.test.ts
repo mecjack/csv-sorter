@@ -5,10 +5,10 @@ import fs, {
   PathLike
 } from 'fs';
 import path from 'path'
-import { exec, execFile, execSync } from 'child_process';
+import { execSync } from 'child_process';
 import process from 'process'
-import { debuglog } from 'util';
-
+import {parse} from 'csv-parse';
+import split from 'split-string';
 
 
 //***  Put all your test CSV files in the test folder. Name them test1.csv to test[n].csv and run the tests with `npm run test`
@@ -50,7 +50,7 @@ test.concurrent.each([...Array(fs.readdirSync(path.join('test')).length-1)].map(
   const withCallback = Math.random() < 0.5;
 
   //---JS
-  console.log('withSource: ', withSource, 'src:', path.join('test', `test${i}.csv`), 'withDest: ', withDest, 'dest:', path.join('res', `res${i}.csv`), 'sortColumn:', col, 'reverse:', reverse, 'sortWithHeader:', sortWithHeader)
+  console.log('withSource: ', withSource, 'src:', path.join('test', `test${i}.csv`), 'withDest: ', withDest, 'dest:', path.join('res', `res${i}.csv`), 'sortColumn:', col, 'reverse:', reverse, 'sortWithHeader:', sortWithHeader, 'withCallback:', withCallback)
   
   let res = <any>[]
  
@@ -84,6 +84,38 @@ test.concurrent.each([...Array(fs.readdirSync(path.join('test')).length-1)].map(
   //---Both
   if(withDest){
     expect(fs.readFileSync(path.join('res', `res${i}.csv`))).toEqual(fs.readFileSync(path.join('res_cli', `res${i}.csv`)))
+
+    fs.readFile(path.join('res', `res${i}.csv`),(err, data)=>{
+
+      const inputFile = fs.readFileSync(path.join('test', `test${i}.csv`))
+
+      const firstLine = inputFile.toString().split('\n')[0];
+      const delimiter = String.fromCharCode(recognizeDelimiter(inputFile));
+      const splittedLine = split(firstLine, { separator: delimiter, quotes: ['"'] });
+
+      let columns = [];
+      for (let i = 0; i < splittedLine.length; i++) {
+        columns.push(`${i+1}`);
+      }
+ 
+      for (let i = 0; i < res.length; i++) {
+        parse(data.toString().split('\n')[i], { 
+          bom: true,
+          ltrim: true,
+          rtrim: true,
+          columns: columns,
+          delimiter: delimiter,
+        }, (err, parsedData)=>{
+          if(err){
+            throw {received: data.toString().split('\n')[i], expectedColumns: columns, parsed: res[i],error: err}
+          }
+          Object.values(parsedData[0]).forEach((element,idx) => {
+            expect(element).toBe(res[i][idx+1]); //One cell in written file to be one cell in sorted JS Object!
+          });
+        })
+      }
+    })
+
   }
 },100000)
 
@@ -139,6 +171,10 @@ test('async return value', async ()=>{
   expect(res).toBeFalsy; //when no await
 })
 
+test('read file error handled', async ()=>{
+  const res = await sort({src: path.join('test', `xyz.csv`), dest: path.join('res', `res${43}.csv`), sortColumn: 2});
+  expect(res.toString().includes(`Error: ENOENT: no such file or directory, open`)).toBeTruthy();
+})
 
 
 function SORT(config: {
@@ -156,6 +192,7 @@ function SORT(config: {
       reverse: config.reverse,
       sortWithHeader: config.sortWithHeader
     }, (data, err) => {
+      if(err) reject(err);
       resolve(data);
     })
   })
@@ -167,4 +204,17 @@ function getRandomIntInclusive(min, max) {
   min = Math.ceil(min);
   max = Math.floor(max);
   return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+
+function recognizeDelimiter(fileBuffer: Buffer) {
+  const delimiters = [',', ';', '|', '\t'];
+  const index = delimiters
+    .map(function (separator) {
+      return fileBuffer.indexOf(separator);
+    })
+    .reduce(function (p, c) {
+      return p === -1 || (c !== -1 && c < p) ? c : p;
+    });
+  return (fileBuffer[index] || 44);
 }
