@@ -1,17 +1,25 @@
-import {parse} from 'csv-parse';
-import fs, {PathLike} from 'fs';
-import {argv, stdin, stdout} from 'process';
+import { parse } from 'csv-parse';
+import fs, { PathLike } from 'fs';
+import { argv, stdin, stdout} from 'process';
 import split from 'split-string';
  
-
+export type Record = {[x: string]: string};
 
 export async function sort(config: {
   src: PathLike,
+  csvString ?: undefined,
   dest ? : PathLike,
   sortColumn: number,
   reverse ? : boolean,
   sortWithHeader ? : boolean
-}, callback ? : Function) {
+} | {
+  src ?: undefined,
+  csvString: string,
+  dest ? : PathLike,
+  sortColumn: number,
+  reverse ? : boolean,
+  sortWithHeader ? : boolean
+}, callback ? : (data: Array<Record> | null, err?: any) => void): Promise<Array<Record>> {
 
   if(callback){
     Promise.all([_sortCSV(config)]).then((values) => {
@@ -30,6 +38,17 @@ export async function sort(config: {
 
 function _sortCSV(config: {
   src ? : PathLike,
+  csvString ? : undefined,
+  stdin ? : Buffer,
+  dest ? : PathLike,
+  sortColumn: number,
+  reverse ? : boolean,
+  sortWithHeader ? : boolean,
+  cli ? : boolean,
+  stdout ? : boolean
+} | {
+  src ? : undefined,
+  csvString ? : string,
   stdin ? : Buffer,
   dest ? : PathLike,
   sortColumn: number,
@@ -38,78 +57,78 @@ function _sortCSV(config: {
   cli ? : boolean,
   stdout ? : boolean
 }) {
-  return new Promise((resolve, reject) => {
+  return new Promise<Array<Record>>((resolve, reject) => {
 
     config.stdin && fs.writeFileSync('tmp.csv', config.stdin);
-    const file = config.stdin? 'tmp.csv': config.src;
+    const file = config.stdin? 'tmp.csv': config.src? config.src: config.csvString;
 
-    fs.readFile(file, (err, data) => {
+      fs.readFile(file, (err, data) => {
 
-      if(err) return reject(err);
-      const firstLine = data.toString().split('\n')[0];
-      const delimiter = String.fromCharCode(recognizeDelimiter(data));
-      const splittedLine = split(firstLine, { separator: delimiter, quotes: ['"'] });
-
-      let columns = [];
-      for (let i = 0; i < splittedLine.length; i++) {
-        columns.push(`${i+1}`);
-      }
-
-      const records = [];
-
-      const parser = parse(data, { //pass csv without header into parser
-        bom: true,
-        ltrim: true,
-        rtrim: true,
-        columns: columns,
-        delimiter: delimiter,
+        if(err && !config.csvString) return reject(err);
+        const firstLine = !config.csvString? data.toString().split('\n')[0]: config.csvString.split('\n')[0];
+        const delimiter = !config.csvString? String.fromCharCode(recognizeDelimiter(data)): String.fromCharCode(recognizeDelimiter(Buffer.from(config.csvString, 'utf-8')));
+        const splittedLine = split(firstLine, { separator: delimiter, quotes: ['"'] });
+  
+        let columns: string[] = [];
+        for (let i = 0; i < splittedLine.length; i++) {
+          columns.push(`${i+1}`);
+        }
+  
+        const records: Array<Record> = [];
+  
+        const parser = parse(!config.csvString? data: config.csvString, { //pass csv without header into parser
+          bom: true,
+          ltrim: true,
+          rtrim: true,
+          columns: columns,
+          delimiter: delimiter,
+        })
+  
+        let first: Record = {};
+  
+        parser.on('readable', function(){
+          let record: Record;
+          while ((record = parser.read()) !== null) {
+            if(Object.keys(first).length === 0  && !config.sortWithHeader){
+              Object.assign(first,record);
+            }else{
+              records.push(record);
+            }
+          }
+        });
+  
+        parser.on('end', function(){
+          let sorted = records.sort((a :Record, b: Record) => {
+            if (!config.reverse) {
+                if(!isNaN(Number(a[config.sortColumn])) && !isNaN(Number(b[config.sortColumn]))){
+                  return parseFloat(a[config.sortColumn]) - parseFloat(b[config.sortColumn])
+                } 
+                  return a[config.sortColumn].localeCompare(b[config.sortColumn], undefined, {
+                    numeric: true,
+                    sensitivity: 'base'
+                  })
+              } else {
+                if(!isNaN(Number(a[config.sortColumn])) && !isNaN(Number(b[config.sortColumn]))){
+                  return parseFloat(b[config.sortColumn]) - parseFloat(a[config.sortColumn])
+                } 
+                  return b[config.sortColumn].localeCompare(a[config.sortColumn], undefined, {
+                    numeric: true,
+                    sensitivity: 'base'
+                  })
+              }
+          })
+          !config.sortWithHeader && sorted.unshift(first);
+          config.dest || config.stdout? write(sorted, splittedLine.length, delimiter): !config.dest && !config.cli? resolve(sorted):null;
+        });
+  
+        parser.on('error', function(err){
+          return reject(err);
+        });
       })
 
-      let first={};
-
-      parser.on('readable', function(){
-        let record;
-        while ((record = parser.read()) !== null) {
-          if(Object.keys(first).length === 0  && !config.sortWithHeader){
-            Object.assign(first,record);
-          }else{
-            records.push(record);
-          }
-        }
-      });
-
-      parser.on('end', function(){
-        let sorted = records.sort((a, b) => {
-          if (!config.reverse) {
-              if(!isNaN(a[config.sortColumn]) && !isNaN(b[config.sortColumn])){
-                return parseFloat(a[config.sortColumn]) - parseFloat(b[config.sortColumn])
-              } 
-                return a[config.sortColumn].localeCompare(b[config.sortColumn], undefined, {
-                  numeric: true,
-                  sensitivity: 'base'
-                })
-            } else {
-              if(!isNaN(a[config.sortColumn]) && !isNaN(b[config.sortColumn])){
-                return parseFloat(b[config.sortColumn]) - parseFloat(a[config.sortColumn])
-              } 
-                return b[config.sortColumn].localeCompare(a[config.sortColumn], undefined, {
-                  numeric: true,
-                  sensitivity: 'base'
-                })
-            }
-        })
-        !config.sortWithHeader && sorted.unshift(first);
-        config.dest || config.stdout? write(sorted, splittedLine.length, delimiter): !config.dest && !config.cli? resolve(sorted):null;
-      });
-
-      parser.on('error', function(err){
-        return reject(err);
-      });
-    })
-
-    function write(sorted: Array<Object>, length: number, delimiter: string) {
+    function write(sorted: Array<Record>, length: number, delimiter: string) {
       try {
-        sorted.forEach((elem: string, j) => {
+        sorted.forEach((elem, j) => {
           let line = ``;
           for (let i = 0; i < length; i++) {
             if (i === length - 1) {
@@ -146,12 +165,14 @@ if(argv[0].includes('node') && !argv[1].includes('jest') && argv[2]){
   (async function(){
   const args = getArgs();
   const file = await read(stdin);
-  if(!/^\d+$/.test(args['c'])){
+  if(args['c']==='' || (typeof args['c']==='boolean' || !/^\d+$/.test(args['c']))){
     stdout.write('sortColumn argument is not UInt\n');
-  }else if(!fs.existsSync(args['s']) && !file.length){
+  }else if(args['s']==='' || (typeof args['s']==='boolean') || (!fs.existsSync(args['s']) && !file.length)){
     stdout.write('Source file does not exist\n');
   }else if(file && file.length && args['s']){
     stdout.write('Two source files provided, which one to take?\n');
+  }else if((typeof args['d']==='boolean') || args['d']===''){
+    stdout.write('No destination file provided!\n');
   }else{
     _sortCSV({
       src: args['s']?args['s']:'',
@@ -167,7 +188,9 @@ if(argv[0].includes('node') && !argv[1].includes('jest') && argv[2]){
 })()
 }
 
-async function read(stream){
+async function read(stream: NodeJS.ReadStream & {
+  fd: 0;
+}){
   let str = '';
   if(stream.isTTY) return Buffer.from(str, 'utf-8'); 
   for await (const i of stream) {
@@ -176,9 +199,17 @@ async function read(stream){
   return Buffer.from(str, 'utf-8');
 }
 
+interface Args {
+  'c'?: string | '' | true;
+  's'?: string | '' | true;
+  'd'?: string | '' | true;
+  'H'?: true;
+  'O'?: true;
+  'R'?: true;
+}
 
-function getArgs () {
-  const args = {};
+function getArgs (): Args {
+  const args: Args = {};
   process.argv
       .slice(2, process.argv.length)
       .forEach( arg => {
@@ -187,13 +218,13 @@ function getArgs () {
           const params = arg.split('=');
           const paramsFlag = params[0].slice(2,params[0].length);
           const paramsValue = params.length > 1 ? params[1] : true;
-          args[paramsFlag] = paramsValue;
+          args[paramsFlag as 'c' | 's' | 'd'] = paramsValue;
       }
       // options
       else if (arg[0] === '-') {
           const options = arg.slice(1,arg.length).split('');
           options.forEach(option => {
-          args[option] = true;
+          args[option as 'H' | 'O' | 'R'] = true;
           });
       }
   });
