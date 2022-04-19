@@ -1,15 +1,18 @@
-import { parse } from 'csv-parse';
-import fs, { PathLike } from 'fs';
-import { argv, stdin, stdout} from 'process';
-import split from 'split-string';
- 
-export type Record = {[x: string]: string};
 
-export async function sort(config: {
+import { argv, stdin, stdout } from 'process';
+import { PathLike } from 'fs';
+import fs from 'fs';
+import { parse } from 'csv';
+import split from 'split-string';
+import { stringify } from 'csv/sync';
+
+export type Record = {[x: string]: string};
+export type Config = {
   src: PathLike,
   csvString ?: undefined,
   dest ? : PathLike,
   sortColumn: number,
+  stringifyOutput ? : boolean,
   reverse ? : boolean,
   sortWithHeader ? : boolean
 } | {
@@ -17,9 +20,29 @@ export async function sort(config: {
   csvString: string,
   dest ? : PathLike,
   sortColumn: number,
+  stringifyOutput ? : boolean,
   reverse ? : boolean,
   sortWithHeader ? : boolean
-}, callback ? : (data: Array<Record> | null, err?: any) => void): Promise<Array<Record>> {
+} 
+
+
+export async function sort(config: {
+  src: PathLike,
+  csvString ?: undefined,
+  dest ? : PathLike,
+  sortColumn: number,
+  stringifyOutput ? : boolean,
+  reverse ? : boolean,
+  sortWithHeader ? : boolean
+} | {
+  src ?: undefined,
+  csvString: string,
+  dest ? : PathLike,
+  sortColumn: number,
+  stringifyOutput ? : boolean,
+  reverse ? : boolean,
+  sortWithHeader ? : boolean
+}, callback ? : (data: Array<Record> | string | null, err?: any) => void): Promise<Array<Record> | string> {
 
   if(callback){
     Promise.all([_sortCSV(config)]).then((values) => {
@@ -42,6 +65,7 @@ function _sortCSV(config: {
   stdin ? : Buffer,
   dest ? : PathLike,
   sortColumn: number,
+  stringifyOutput ? : boolean,
   reverse ? : boolean,
   sortWithHeader ? : boolean,
   cli ? : boolean,
@@ -52,12 +76,13 @@ function _sortCSV(config: {
   stdin ? : Buffer,
   dest ? : PathLike,
   sortColumn: number,
+  stringifyOutput ? : boolean,
   reverse ? : boolean,
   sortWithHeader ? : boolean,
   cli ? : boolean,
   stdout ? : boolean
 }) {
-  return new Promise<Array<Record>>((resolve, reject) => {
+  return new Promise<Array<Record> | string>((resolve, reject) => {
 
     config.stdin && fs.writeFileSync('tmp.csv', config.stdin);
     const file = config.stdin? 'tmp.csv': config.src? config.src: config.csvString;
@@ -67,9 +92,9 @@ function _sortCSV(config: {
         if(err && !config.csvString) return reject(err);
         const firstLine = !config.csvString? data.toString().split('\n')[0]: config.csvString.split('\n')[0];
         const delimiter = !config.csvString? String.fromCharCode(recognizeDelimiter(data)): String.fromCharCode(recognizeDelimiter(Buffer.from(config.csvString, 'utf-8')));
-        const splittedLine = split(firstLine, { separator: delimiter, quotes: ['"'] });
+        const splittedLine = split(firstLine, { quotes: ['"'], separator: delimiter });
   
-        let columns: string[] = [];
+        const columns: string[] = [];
         for (let i = 0; i < splittedLine.length; i++) {
           columns.push(`${i+1}`);
         }
@@ -78,13 +103,13 @@ function _sortCSV(config: {
   
         const parser = parse(!config.csvString? data: config.csvString, { //pass csv without header into parser
           bom: true,
-          ltrim: true,
-          rtrim: true,
           columns: columns,
           delimiter: delimiter,
-        })
+          ltrim: true,
+          rtrim: true,
+        });
   
-        let first: Record = {};
+        const first: Record = {};
   
         parser.on('readable', function(){
           let record: Record;
@@ -98,38 +123,44 @@ function _sortCSV(config: {
         });
   
         parser.on('end', function(){
-          let sorted = records.sort((a :Record, b: Record) => {
+          const sorted = records.sort((a :Record, b: Record) => {
             if (!config.reverse) {
                 if(!isNaN(Number(a[config.sortColumn])) && !isNaN(Number(b[config.sortColumn]))){
-                  return parseFloat(a[config.sortColumn]) - parseFloat(b[config.sortColumn])
+                  return parseFloat(a[config.sortColumn]) - parseFloat(b[config.sortColumn]);
                 } 
                   return a[config.sortColumn].localeCompare(b[config.sortColumn], undefined, {
                     numeric: true,
                     sensitivity: 'base'
-                  })
+                  });
               } else {
                 if(!isNaN(Number(a[config.sortColumn])) && !isNaN(Number(b[config.sortColumn]))){
-                  return parseFloat(b[config.sortColumn]) - parseFloat(a[config.sortColumn])
+                  return parseFloat(b[config.sortColumn]) - parseFloat(a[config.sortColumn]);
                 } 
                   return b[config.sortColumn].localeCompare(a[config.sortColumn], undefined, {
                     numeric: true,
                     sensitivity: 'base'
-                  })
+                  });
               }
-          })
+          });
           !config.sortWithHeader && sorted.unshift(first);
-          config.dest || config.stdout? write(sorted, splittedLine.length, delimiter): !config.dest && !config.cli? resolve(sorted):null;
+          if(config.dest || config.stdout){
+            write(sorted, splittedLine.length, delimiter);
+          }else if(!config.dest && !config.cli){
+            if(config.stringifyOutput){
+              resolve(stringify(sorted));
+            } else resolve(sorted);
+          }
         });
   
-        parser.on('error', function(err){
+        parser.on('error', function(err: any){
           return reject(err);
         });
-      })
+      });
 
     function write(sorted: Array<Record>, length: number, delimiter: string) {
       try {
         sorted.forEach((elem, j) => {
-          let line = ``;
+          let line = '';
           for (let i = 0; i < length; i++) {
             if (i === length - 1) {
               line += elem[i+1].includes(delimiter)? `"${elem[i+1]}"`: `${elem[i+1]}`;
@@ -137,28 +168,18 @@ function _sortCSV(config: {
               line += elem[i+1].includes(delimiter)? `"${elem[i+1]}"${delimiter}`: `${elem[i+1]}${delimiter}`;
             }
           }
-          if(sorted.length -1 > j) line += `\n`;
-          config.dest && fs.appendFileSync(config.dest, line)
-          config.stdout && process.stdout.write(line)
+          if(sorted.length -1 > j) line += '\n';
+          config.dest && fs.appendFileSync(config.dest, line);
+          config.stdout && process.stdout.write(line);
         });
-        resolve(sorted);
+        if(config.stringifyOutput){
+          resolve(stringify(sorted));
+        } else resolve(sorted);
       } catch (err) {
-        return reject(err)
+        return reject(err);
       }
     }
-
-    function recognizeDelimiter(fileBuffer: Buffer) {
-      const delimiters = [',', ';', '|', '\t'];
-      const index = delimiters
-        .map(function (separator) {
-          return fileBuffer.indexOf(separator);
-        })
-        .reduce(function (p, c) {
-          return p === -1 || (c !== -1 && c < p) ? c : p;
-        });
-      return (fileBuffer[index] || 44);
-    }
-  })
+  });
 }
 
 if(argv[0].includes('node') && !argv[1].includes('jest') && argv[2]){
@@ -175,17 +196,17 @@ if(argv[0].includes('node') && !argv[1].includes('jest') && argv[2]){
     stdout.write('No destination file provided!\n');
   }else{
     _sortCSV({
+      cli: true,
+      dest: args['d']? args['d']: null,
+      reverse: args['R']? true: false,
+      sortColumn: parseInt(args['c']),
+      sortWithHeader: args['H']? true: false,
       src: args['s']?args['s']:'',
       stdin: file && file.length?file:null,
-      dest: args['d']? args['d']: null,
-      sortColumn: parseInt(args['c']),
-      reverse: args['R']? true: false,
-      sortWithHeader: args['H']? true: false,
-      cli: true,
       stdout: !args['d'] || args['O']
-    })
+    });
   }
-})()
+})();
 }
 
 async function read(stream: NodeJS.ReadStream & {
@@ -229,4 +250,16 @@ function getArgs (): Args {
       }
   });
   return args;
+}
+
+function recognizeDelimiter(fileBuffer: Buffer) {
+  const delimiters = [',', ';', '|', '\t'];
+  const index = delimiters
+    .map(function (separator) {
+      return fileBuffer.indexOf(separator);
+    })
+    .reduce(function (p, c) {
+      return p === -1 || (c !== -1 && c < p) ? c : p;
+    });
+  return (fileBuffer[index] || 44);
 }

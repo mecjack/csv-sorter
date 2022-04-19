@@ -1,5 +1,7 @@
 node_modules
+browser-test/node_modules
 /lib
+/browser
 test
 short_tests
 long_tests
@@ -9,3 +11,4 @@ tmp.csv
 .DS_Store
 coverage
 scripts
+.vscode

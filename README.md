@@ -3,16 +3,18 @@
 ## What's that?
 
 Naturally sort your CSV files by a column of your choice with delimiter auto recognition.
-Save the result into a new sorted .csv file or return an array of objects of sorted records for further manipulation.   
+Save the sorted result into a new .csv file or return a csv string or an array of sorted records for further manipulation.   
 Or use it from the CLI!
+
+You can use the same module for node.js or the browser (e.g. react.js) with es5 compatibility, only the import syntax is different.
 
 
 ## Usage:    
 
 ```js
 
-const csv = require('csv-sorter');
-
+import { sort } from 'csv-sorter'; //node.js environment
+import { sort } from 'csv-sorter/browser/umd'; //browser environment 
 
 const config  = {
     src: './Source.csv',
@@ -21,15 +23,15 @@ const config  = {
     sortWithHeader: false //sort including first header line
 };
 
-csv.sort(config, (result, err)=>{
+sort(config, (result, err)=>{
     if(err) throw err;
-    console.log(result); //array of objects of sorted records for further manipulation
+    console.log(result); //array of sorted records for further manipulation
 });
 
 /* Async await */  😎 
 
 async function foo(){
-    const result = await csv.sort(config);
+    const result = await sort(config);
     console.log(result); //array of sorted records for further manipulation, or error
 } 
 
@@ -45,7 +47,7 @@ const config  = {
     sortWithHeader: false //sort including first header line
 };
 
-csv.sort(config, (result, err)=>{
+sort(config, (result, err)=>{
     if(err) throw err;
     //your sorted Result.csv file was successfully saved...
     console.log(result); //also ready is your array of sorted records for further manipulation
@@ -67,9 +69,22 @@ async function foo(){
     sortColumn: 1,
     };
 
-    const result = await csv.sort(config);
+    const result = await sort(config);
     console.log(result); 
 } 
+
+// To stringify the output you can use the stringifyOutput option:
+
+const config  = {
+    src: './Source.csv',
+    sortColumn: 1, //number of column to sort
+    stringifyOutput: true //return a string instead of an array of records
+};
+
+sort(config, (result, err)=>{
+    if(err) throw err;
+    console.log(result); //csv string
+});
 
 ```
 

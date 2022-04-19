@@ -1,5 +1,4 @@
-const csv = require('csv-sorter');
-
+import { sort } from 'csv-sorter';
 
 const config  = {
     src: './Source.csv',
@@ -8,7 +7,7 @@ const config  = {
     sortWithHeader: false //sort including first header line
 };
 
-csv.sort(config, (result, err)=>{
+sort(config, (result, err)=>{
     if(err) throw err;
     console.log(result) //array of objects of sorted records for further manipulation
 });
@@ -16,7 +15,7 @@ csv.sort(config, (result, err)=>{
 /* Async await 😎 */
 
 async function foo(){
-    const result = await csv.sort(config);
+    const result = await sort(config);
     console.log(result); //array of objects of sorted records for further manipulation, or error
 } 
 
@@ -32,7 +31,7 @@ const config  = {
     sortWithHeader: false //sort including first header line
 };
 
-csv.sort(config, (result, err)=>{
+sort(config, (result, err)=>{
     if(err) throw err;
     //your sorted Result.csv file was successfully saved...
     console.log(result); //also ready is your array of sorted records for further manipulation
@@ -53,6 +52,6 @@ async function foo(){
     sortColumn: 1,
     };
 
-    const result = await csv.sort(config);
+    const result = await sort(config);
     console.log(result); 
 } 
