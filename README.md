@@ -109,6 +109,10 @@ async function foo(){
     const result = await sort(config);
     console.log(result); 
 } 
+
+
+//or import via sctipt tag from CDN in html
+<script src="https://cdn.jsdelivr.net/npm/csv-sorter@2.4.1/browser/umd.js"></script>
 ```
 
 ## Or from CLI:
